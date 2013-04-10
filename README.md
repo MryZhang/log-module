@@ -30,7 +30,7 @@
     log_set_rotate_cycle("M");
 
     /* 设置日志存储目录, 以及日志文件名称
-     * 例如下面例子中, 日志文件会保存在 ./logs/Shakespeare_50.log中 
+     * 例如下面例子中, 日志文件会保存在 ./log/Shakespeare_50.log中 
      */
     if (log_set_prefix(".", "Shakespeare_50") != 0) {
         exit(EXIT_FAILURE);
