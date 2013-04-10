@@ -19,8 +19,17 @@
 #include <string>
 
 /************************************************************************
+* GLOBAL DEFINITIONS
+************************************************************************/
+
+/* 日志级别, 可参考<sys/syslog.h>. 默认级别是LOG_INFO */
+int log_level = LOG_INFO;
+
+/************************************************************************
 * PRIVATE DEFINITIONS
 ************************************************************************/
+
+#define LOG_PATH "log"
 
 #define LOG_LINE_MAX		2048
 #define LOG_BUFF_SIZE		1024 * 1024
@@ -29,7 +38,8 @@
 #define STRERROR(no) (strerror(no) != NULL ? strerror(no) : "Unkown error")
 
 /* 日志切分周期枚举 */
-typedef enum {
+typedef enum 
+{
 	ROTATE_CYCLE_NONE = 0,
 	ROTATE_CYCLE_MINUTE = 1, 
 	ROTATE_CYCLE_HOUR = 2,
@@ -37,7 +47,8 @@ typedef enum {
 } LOGROTATE_CYCLE;
 
 /* 专用于写磁盘的线程上下文 */
-typedef struct disk_thread_context {
+typedef struct disk_thread_context 
+{
 	/* 写磁盘线程id */
 	pthread_t disk_pthread_id;
 
@@ -55,10 +66,8 @@ typedef struct disk_thread_context {
 } DISK_THREAD_CONTEXT;
 
 /* 供模块内部使用的日志上下文结构 */
-typedef struct log_context {
-	/* 日志级别, 可参考<sys/syslog.h>. 默认级别是LOG_INFO */
-	int log_level;
-
+typedef struct log_context 
+{
 	/* 日志文件fd, 默认值是 STDERR_FILENO */
 	int log_fd;
 
@@ -141,7 +150,8 @@ int log_init()
 			return (errno != 0) ? errno : ENOMEM;
 		}
 
-		pContext->log_level = LOG_INFO;
+		log_level = LOG_INFO;
+
 		pContext->log_fd = STDERR_FILENO;
 		pContext->log_base_path = NULL;
 		pContext->log_filename_prefix = NULL;
@@ -344,21 +354,21 @@ int log_set_level(const char *pLogLevel)
 	}
 
 	if (strncasecmp(pLogLevel, "DEBUG", 5) == 0 || strcmp(pLogLevel, "LOG_DEBUG") == 0) {
-		pContext->log_level = LOG_DEBUG;
+		log_level = LOG_DEBUG;
 	} else if (strncasecmp(pLogLevel, "INFO", 4) == 0 || strcmp(pLogLevel, "LOG_INFO") == 0) {
-		pContext->log_level = LOG_INFO;
+		log_level = LOG_INFO;
 	} else if (strncasecmp(pLogLevel, "NOTICE", 6) == 0 || strcmp(pLogLevel, "LOG_NOTICE") == 0) {
-		pContext->log_level = LOG_NOTICE;
+		log_level = LOG_NOTICE;
 	} else if (strncasecmp(pLogLevel, "WARN", 4) == 0 || strcmp(pLogLevel, "LOG_WARNING") == 0) {
-		pContext->log_level = LOG_WARNING;
+		log_level = LOG_WARNING;
 	} else if (strncasecmp(pLogLevel, "ERR", 3) == 0 || strcmp(pLogLevel, "LOG_ERR") == 0) {
-		pContext->log_level = LOG_ERR;
+		log_level = LOG_ERR;
 	} else if (strncasecmp(pLogLevel, "CRIT", 4) == 0 || strcmp(pLogLevel, "LOG_CRIT") == 0) {
-		pContext->log_level = LOG_CRIT;
+		log_level = LOG_CRIT;
 	} else if (strncasecmp(pLogLevel, "ALERT", 5) == 0 || strcmp(pLogLevel, "LOG_ALERT") == 0) {
-		pContext->log_level = LOG_ALERT;
+		log_level = LOG_ALERT;
 	} else if (strncasecmp(pLogLevel, "EMERG", 5) == 0 || strcmp(pLogLevel, "LOG_EMERG") == 0) {
-		pContext->log_level = LOG_EMERG;
+		log_level = LOG_EMERG;
 	} else {
 		fprintf(stderr, "invalid log level \"%s\"\n", pLogLevel);
 		return 1;	
@@ -391,7 +401,7 @@ int log_set_prefix(const char *base_path, const char *filename_prefix)
 		return result;
 	}
 
-	snprintf(logfile, LOG_MAX_PATH_SIZE, "%s/logs/%s.log", base_path, filename_prefix);
+	snprintf(logfile, LOG_MAX_PATH_SIZE, "%s/"LOG_PATH"/%s.log", base_path, filename_prefix);
 
 	if ((pContext->log_fd = open(logfile, O_WRONLY | O_CREAT | O_APPEND, 0644)) < 0) {
 		fprintf(stderr, "open log file \"%s\" to write fail, errno: %d, error info: %s", logfile, errno, STRERROR(errno));
@@ -512,7 +522,7 @@ int logEx(int priority, const char *caption, const bool bNeedSync,
 		return 1;
 	}
 
-	if (pContext->log_level < priority) {
+	if (log_level < priority) {
 		return 0;
 	}
 
@@ -609,8 +619,8 @@ int logEx(int priority, const char *caption, const bool bNeedSync,
 			break;
 		}
 
-		snprintf(cur_filename, LOG_MAX_PATH_SIZE, "%s/logs/%s.log", pContext->log_base_path, pContext->log_filename_prefix);
-		snprintf(log_filename, LOG_MAX_PATH_SIZE, "%s/logs/%s.%s.log", pContext->log_base_path, pContext->log_filename_prefix, filename_time_suffix);
+		snprintf(cur_filename, LOG_MAX_PATH_SIZE, "%s/"LOG_PATH"/%s.log", pContext->log_base_path, pContext->log_filename_prefix);
+		snprintf(log_filename, LOG_MAX_PATH_SIZE, "%s/"LOG_PATH"/%s.%s.log", pContext->log_base_path, pContext->log_filename_prefix, filename_time_suffix);
 
 		/* 将前一个时间段的日志切分出去 */
 		if (rename(cur_filename, log_filename) < 0) {
@@ -643,7 +653,7 @@ int logEx(int priority, const char *caption, const bool bNeedSync,
 static int check_and_mk_log_dir(const char *base_path)
 {
 	char data_path[LOG_MAX_PATH_SIZE];
-	snprintf(data_path, sizeof(data_path), "%s/logs", base_path);
+	snprintf(data_path, sizeof(data_path), "%s/"LOG_PATH, base_path);
 
 	if (access(data_path, 0) != 0) {
 		if (mkdir(data_path, 0755) != 0) {
@@ -728,3 +738,6 @@ static int log_fsync(const bool bNeedLock)
 	return result;
 }
 
+/* 
+ * vim: ts=8 sw=8 expandtab fenc=utf-8
+ */
